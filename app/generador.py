@@ -7,13 +7,14 @@ from collections import defaultdict
 import bz2
 from datetime import datetime
 import graphlib
+import os
 
 
 def process_tweet(tweet, hashtags, authors, mentions, retweets, co_retweets):
     # Procesa el tweet según tus necesidades
     print(tweet)
     # Registra las menciones y retweets
-    for mention in tweet['mentions']:
+    for mention in tweet.get('mentions', []):
         mentions[mention] = mentions.get(mention, [])
         mentions[mention].append(tweet['id'])
     if 'retweet' in tweet:
@@ -21,6 +22,7 @@ def process_tweet(tweet, hashtags, authors, mentions, retweets, co_retweets):
         retweets[retweeted_id] = retweets.get(retweeted_id, [])
         retweets[retweeted_id].append(tweet['author'])
         co_retweets[(tweet['author'], retweeted_id)] = co_retweets.get((tweet['author'], retweeted_id), 0) + 1
+        
 
 def main(argv):
     input_directory = 'app'
@@ -74,14 +76,13 @@ def main(argv):
     retweets = {}
     co_retweets = {}
 
+
     for root, dirs, files in os.walk(input_directory):
         for file in files:
             if file.endswith('.bz2'):
                 with bz2.BZ2File(os.path.join(root, file), 'rb') as f:
                     for line in f:
-                        tweet = json.loads(line)
                         tweet_date = datetime.strptime(tweet['created_at'], '%a %b %d %H:%M:%S %z %Y')
-
                         if (not start_date or tweet_date >= start_date) and (not end_date or tweet_date <= end_date):
                             if not hashtags or any(hashtag.lower() in tweet['text'].lower() for hashtag in hashtags):
                                 process_tweet(tweet, hashtags, authors, mentions, retweets, co_retweets)
