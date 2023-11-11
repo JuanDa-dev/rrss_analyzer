@@ -9,7 +9,8 @@ from datetime import datetime
 import graphlib
 import os
 import timeit
-start_time = timeit.default_timer()
+
+
 def generate_retweet_graph(tweets):
     G = nx.DiGraph()
     for tweet in tweets:
@@ -18,23 +19,21 @@ def generate_retweet_graph(tweets):
             retweeting_user = tweet['user']['screen_name']
             G.add_edge(retweeted_user, retweeting_user)
     return G
-import json
 
-def generate_retweet_json(tweets):
-    retweets_dict = {}
+def create_retweet_json(tweets):
+    retweets = {}
     for tweet in tweets:
         if 'retweeted_status' in tweet:
             retweeted_user = tweet['retweeted_status']['user']['screen_name']
             retweeting_user = tweet['user']['screen_name']
             tweet_id = tweet['id']
-            
-            if retweeted_user not in retweets_dict:
-                retweets_dict[retweeted_user] = {'receivedRetweets': 0, 'tweets': []}
-            
-            retweets_dict[retweeted_user]['receivedRetweets'] += 1
-            retweets_dict[retweeted_user]['tweets'].append({'tweetId': tweet_id, 'retweetedBy': retweeting_user})
-    
-    return json.dumps(retweets_dict, indent=4)
+            if retweeted_user not in retweets:
+                retweets[retweeted_user] = {'receivedRetweets': 1, 'tweets': [{'id': tweet_id, 'retweeted_by': retweeting_user}]}
+            else:
+                retweets[retweeted_user]['receivedRetweets'] += 1
+                retweets[retweeted_user]['tweets'].append({'id': tweet_id, 'retweeted_by': retweeting_user})
+    with open('rt.json', 'w') as f:
+        json.dump(retweets, f)
 
 
 def generate_co_retweet_graph(tweets):
@@ -51,17 +50,20 @@ def generate_co_retweet_graph(tweets):
                 G.add_edge(users[i], users[j])
     return G
 
-def generate_co_retweets_json(tweets):
-    co_retweets_dict = defaultdict(list)
-    
+def create_coretweet_json(tweets):
+    coretweets = {}
     for tweet in tweets:
         if 'retweeted_status' in tweet:
             retweeted_user = tweet['retweeted_status']['user']['screen_name']
             retweeting_user = tweet['user']['screen_name']
-            
-            co_retweets_dict[retweeted_user].append(retweeting_user)
-    
-    return json.dumps(co_retweets_dict, indent=4)
+            if retweeted_user not in coretweets:
+                coretweets[retweeted_user] = {'totalCoretweets': 1, 'retweeters': [retweeting_user]}
+            else:
+                coretweets[retweeted_user]['totalCoretweets'] += 1
+                coretweets[retweeted_user]['retweeters'].append(retweeting_user)
+    coretweets = {user: data for user, data in coretweets.items() if len(data['retweeters']) > 2}
+    with open('corrtw.json', 'w') as f:
+        json.dump(coretweets, f)
 
 def generate_mention_graph(tweets):
     G = nx.DiGraph()
@@ -73,22 +75,21 @@ def generate_mention_graph(tweets):
                 G.add_edge(tweeting_user, mentioned_user)
     return G
 
-def generate_mentions_json(tweets):
-    mentions_dict = {}
-    
+def create_mention_json(tweets):
+    mentions = {}
     for tweet in tweets:
         if 'entities' in tweet and 'user_mentions' in tweet['entities']:
-            for mention in tweet['entities']['user_mentions']:
-                mentioned_user = mention['screen_name']
-                tweet_id = tweet['id']
-                
-                if mentioned_user not in mentions_dict:
-                    mentions_dict[mentioned_user] = {'receivedMentions': 0, 'tweets': []}
-                
-                mentions_dict[mentioned_user]['receivedMentions'] += 1
-                mentions_dict[mentioned_user]['tweets'].append({'tweetId': tweet_id, 'mentionedBy': tweet['user']['screen_name']})
-    
-    return json.dumps(mentions_dict, indent=4)
+            mentioning_user = tweet['user']['screen_name']
+            tweet_id = tweet['id']
+            for user_mention in tweet['entities']['user_mentions']:
+                mentioned_user = user_mention['screen_name']
+                if mentioned_user not in mentions:
+                    mentions[mentioned_user] = {'receivedMentions': 1, 'mentions': [{'id': tweet_id, 'mentioned_by': mentioning_user}]}
+                else:
+                    mentions[mentioned_user]['receivedMentions'] += 1
+                    mentions[mentioned_user]['mentions'].append({'id': tweet_id, 'mentioned_by': mentioning_user})
+    with open('mencion.json', 'w') as f:
+        json.dump(mentions, f)
 
 def process_tweets(input_directory, start_date, end_date, hashtags):
     tweets = []
@@ -102,22 +103,16 @@ def process_tweets(input_directory, start_date, end_date, hashtags):
                         
     G_rt = generate_retweet_graph(tweets)
     nx.write_gexf(G_rt, 'retweet_graph.gexf')
-    retweet_data = generate_retweet_json(tweets)
-    with open('retweet_data.json', 'w') as f:
-        json.dump(retweet_data, f)
-    
     G_crt = generate_co_retweet_graph(tweets)
     nx.write_gexf(G_crt, 'co_retweet_graph.gexf')
-    corretweet_data = generate_co_retweets_json(tweets)
-    with open('co_retweet_data.json', 'w') as f:
-        json.dump(corretweet_data, f)
-    
     G_m = generate_mention_graph(tweets)
     nx.write_gexf(G_m, 'mention_graph.gexf')
-    mentions_data = generate_mentions_json(tweets)
-    with open('mentions_data.json', 'w') as f:
-        json.dump(mentions_data, f)
-
+    
+    create_retweet_json(tweets)
+    create_mention_json(tweets)
+    create_coretweet_json(tweets)
+        
+start_time = timeit.default_timer()
 def main(argv):
     input_directory = 'app'
     start_date = None
